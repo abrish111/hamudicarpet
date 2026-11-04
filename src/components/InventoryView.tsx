@@ -8,15 +8,16 @@ import {
   Sliders,
   Search,
   History,
+  Download,
   AlertTriangle,
   CheckCircle2,
   TrendingDown,
   TrendingUp,
   RefreshCw,
-  FileSpreadsheet,
-  X
+  FileSpreadsheet
 } from "lucide-react";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
+import { exportInventoryToExcel } from "@/lib/excel-export";
 import type { Product, InventoryLog } from "@/types";
 
 interface InventoryViewProps {
@@ -175,7 +176,7 @@ export function InventoryView({ products, currency, onRefresh }: InventoryViewPr
 
       {/* TAB 1: STOCKS */}
       {activeTab === "stocks" && (
-        <div className="bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl overflow-hidden space-y-4 p-5">
+        <div className="bg-slate-900/90 rounded-xl sm:rounded-2xl border border-slate-800 shadow-xl overflow-hidden space-y-3 p-3 sm:p-5">
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
@@ -187,61 +188,7 @@ export function InventoryView({ products, currency, onRefresh }: InventoryViewPr
             />
           </div>
 
-          {/* Mobile stock cards */}
-          <div className="md:hidden space-y-3">
-            {filteredProducts.map((p) => {
-              const isLow = p.stockQuantity <= p.minStockThreshold;
-              const itemCost = parseFloat(p.costPrice || "0");
-              const itemValue = p.stockQuantity * itemCost;
-
-              return (
-                <div key={p.id} className="bg-slate-800/50 rounded-2xl border border-slate-700/60 p-4 space-y-2.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-mono font-bold text-amber-400">{p.code}</p>
-                      <p className="text-sm font-bold text-white leading-tight">{p.name}</p>
-                      {p.dimensions && <p className="text-[11px] text-slate-400">{p.dimensions}</p>}
-                    </div>
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
-                        isLow
-                          ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
-                          : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                      }`}
-                    >
-                      {isLow ? "Low Stock" : "Sufficient"}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div className="bg-slate-900/70 rounded-xl py-2">
-                      <p className="text-[10px] text-slate-400">In Stock</p>
-                      <p className="text-sm font-black text-white">{p.stockQuantity} <span className="text-[10px] font-normal text-slate-400">{p.unit}</span></p>
-                    </div>
-                    <div className="bg-slate-900/70 rounded-xl py-2">
-                      <p className="text-[10px] text-slate-400">Unit Cost</p>
-                      <p className="text-sm font-bold text-slate-200">{formatCurrency(p.costPrice, currency)}</p>
-                    </div>
-                    <div className="bg-slate-900/70 rounded-xl py-2">
-                      <p className="text-[10px] text-slate-400">Value</p>
-                      <p className="text-sm font-bold text-amber-400">{formatCurrency(itemValue, currency)}</p>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => openAdjustModal(p)}
-                    className="w-full py-2.5 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl inline-flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
-                  >
-                    <Sliders className="w-3.5 h-3.5 text-amber-400" />
-                    Adjust Stock
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Desktop stock table */}
-          <div className="hidden md:block overflow-x-auto">
+          <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-slate-800 text-slate-400 uppercase text-[10px] tracking-wider font-semibold bg-slate-800/40">
@@ -312,6 +259,7 @@ export function InventoryView({ products, currency, onRefresh }: InventoryViewPr
               onClick={fetchLogs}
               className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs flex items-center gap-1"
             >
+            <button onClick={() => exportInventoryToExcel(products)} className="px-2.5 py-1 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 rounded-lg flex items-center gap-1"><Download className="w-3.5 h-3.5" /> Excel</button>
               <RefreshCw className={`w-3.5 h-3.5 ${loadingLogs ? "animate-spin" : ""}`} /> Refresh
             </button>
           </div>
@@ -369,16 +317,13 @@ export function InventoryView({ products, currency, onRefresh }: InventoryViewPr
         </div>
       )}
 
-      {/* ADJUSTMENT MODAL (bottom sheet on mobile) */}
+      {/* ADJUSTMENT MODAL */}
       {isAdjustModalOpen && selectedProduct && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 sm:p-4 animate-fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md p-5 sm:p-6 shadow-2xl space-y-4 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:pb-6">
-            <div className="mx-auto w-10 h-1 rounded-full bg-slate-700 sm:hidden" />
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 p-0 sm:p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[85vh] overflow-y-auto p-5 shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="text-base font-extrabold text-white">Stock Adjustment: {selectedProduct.name}</h3>
-              <button onClick={() => setIsAdjustModalOpen(false)} className="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white active:scale-95 transition-transform">
-                <X className="w-4 h-4" />
-              </button>
+              <button onClick={() => setIsAdjustModalOpen(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
 
             <form onSubmit={handleSaveAdjustment} className="space-y-4">
@@ -417,11 +362,10 @@ export function InventoryView({ products, currency, onRefresh }: InventoryViewPr
                 <label className="text-xs font-bold text-slate-400 block mb-1">Quantity</label>
                 <input
                   type="number"
-                  min="0"
+                  min="1"
                   required
-                  step="any"
                   value={adjustQty}
-                  onChange={(e) => setAdjustQty(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => setAdjustQty(parseInt(e.target.value, 10) || 1)}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
                 />
               </div>

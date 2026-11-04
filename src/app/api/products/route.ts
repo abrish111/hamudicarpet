@@ -1,80 +1,28 @@
 import { NextResponse } from "next/server";
 import { db, products, inventoryLogs } from "@/db";
-import { seedDatabase } from "@/db/seed";
-import { desc, asc, ilike, or, eq } from "drizzle-orm";
-
+import { and, eq, asc } from "drizzle-orm";
+import { getStore, apiError, assertSameOrigin, ApiError, money, textValue, quantity } from "@/lib/store-context";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  try {
-    await seedDatabase(false);
-    const { searchParams } = new URL(req.url);
-    const category = searchParams.get("category");
-    const search = searchParams.get("search");
-
-    let items = await db.select().from(products).orderBy(asc(products.id));
-
-    if (category && category !== "All") {
-      items = items.filter(p => p.category.toLowerCase() === category.toLowerCase());
-    }
-
-    if (search) {
-      const q = search.toLowerCase();
-      items = items.filter(p => 
-        p.name.toLowerCase().includes(q) ||
-        p.code.toLowerCase().includes(q) ||
-        (p.dimensions && p.dimensions.toLowerCase().includes(q)) ||
-        p.category.toLowerCase().includes(q)
-      );
-    }
-
-    return NextResponse.json(items);
-  } catch (error) {
-    console.error("Error fetching products:", error);
-    return NextResponse.json({ error: "Failed to fetch products" }, { status: 500 });
-  }
+  try { const store = await getStore(req); const q = new URL(req.url).searchParams;
+    let rows = await db.select().from(products).where(and(eq(products.storeId, store.id), eq(products.isActive, true))).orderBy(asc(products.id));
+    if (q.get("category") && q.get("category") !== "All") rows = rows.filter(p => p.category === q.get("category"));
+    if (q.get("search")) { const s=q.get("search")!.toLowerCase(); rows=rows.filter(p => [p.name,p.code,p.dimensions,p.category].some(v => (v||"").toLowerCase().includes(s))); }
+    return NextResponse.json(rows);
+  } catch(e) { return apiError(e); }
 }
-
 export async function POST(req: Request) {
-  try {
-    const data = await req.json();
-
-    if (!data.name || !data.code) {
-      return NextResponse.json({ error: "Name and code are required" }, { status: 400 });
-    }
-
-    const [newProduct] = await db.insert(products).values({
-      code: data.code.trim().toUpperCase(),
-      name: data.name.trim(),
-      category: data.category || "Readymade Carpet",
-      unit: data.unit || "pcs",
-      dimensions: data.dimensions || "",
-      costPrice: String(data.costPrice || "0.00"),
-      sellingPrice: String(data.sellingPrice || "0.00"),
-      stockQuantity: parseFloat(data.stockQuantity || "0"),
-      minStockThreshold: parseInt(data.minStockThreshold || "5", 10),
-      description: data.description || "",
-      imageUrl: data.imageUrl || "",
-      isActive: data.isActive ?? true,
-    }).returning();
-
-    // Log initial stock if > 0
-    if (newProduct.stockQuantity > 0) {
-      await db.insert(inventoryLogs).values({
-        productId: newProduct.id,
-        productName: newProduct.name,
-        changeType: "initial",
-        quantityChange: newProduct.stockQuantity,
-        previousStock: 0,
-        newStock: newProduct.stockQuantity,
-        reason: "Initial product stock opening",
-        referenceNumber: newProduct.code,
-      });
-    }
-
-    return NextResponse.json(newProduct, { status: 201 });
-  } catch (error) {
-    console.error("Error creating product:", error);
-    return NextResponse.json({ error: "Failed to create product" }, { status: 500 });
-  }
+  try { assertSameOrigin(req); const store=await getStore(req); const d=await req.json();
+    const code=textValue(d.code,40).toUpperCase(), name=textValue(d.name,200);
+    if (!code || !name) throw new ApiError("Product name and code are required");
+    const stock=Number(d.stockQuantity || 0); if(!Number.isSafeInteger(stock)||stock<0)throw new ApiError("Stock must be a non-negative integer");
+    const existing=await db.select({id:products.id}).from(products).where(and(eq(products.storeId,store.id),eq(products.code,code))).limit(1);
+    if(existing.length)throw new ApiError("This product code already exists in this store",409);
+    const result=await db.transaction(async tx=>{
+      const [p]=await tx.insert(products).values({storeId:store.id,code,name,category:textValue(d.category,100)||"Readymade Carpet",unit:textValue(d.unit,30)||"pcs",dimensions:textValue(d.dimensions),costPrice:money(d.costPrice).toFixed(2),sellingPrice:money(d.sellingPrice).toFixed(2),stockQuantity:stock,minStockThreshold:Math.max(0,Number(d.minStockThreshold)||5),description:textValue(d.description,1000),imageUrl:textValue(d.imageUrl,1000)}).returning();
+      if(stock>0)await tx.insert(inventoryLogs).values({storeId:store.id,productId:p.id,productName:p.name,changeType:"initial",quantityChange:stock,previousStock:0,newStock:stock,reason:"Opening stock",referenceNumber:p.code});
+      return p;
+    }); return NextResponse.json(result,{status:201});
+  } catch(e) {return apiError(e);}
 }

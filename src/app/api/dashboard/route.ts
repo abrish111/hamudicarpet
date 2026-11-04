@@ -3,24 +3,27 @@ import { db, sales, saleItems, purchases, products } from "@/db";
 import { seedDatabase } from "@/db/seed";
 import { desc, sql, gte, lte } from "drizzle-orm";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
+import { getStore, apiError } from "@/lib/store-context";
+import { eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
     await seedDatabase(false);
+    const store = await getStore(req);
 
     const { searchParams } = new URL(req.url);
-    const monthsCount = parseInt(searchParams.get("months") || "6", 10);
+    const monthsCount = Math.min(12, Math.max(3, parseInt(searchParams.get("months") || "6", 10) || 6));
     const selectedYear = searchParams.get("year");
 
     const now = new Date();
     
     // Fetch all sales and purchases
-    const allSales = await db.select().from(sales).orderBy(desc(sales.saleDate));
-    const allPurchases = await db.select().from(purchases).orderBy(desc(purchases.purchaseDate));
-    const allProducts = await db.select().from(products);
-    const allSaleItems = await db.select().from(saleItems);
+    const allSales = await db.select().from(sales).where(eq(sales.storeId, store.id)).orderBy(desc(sales.saleDate));
+    const allPurchases = await db.select().from(purchases).where(eq(purchases.storeId, store.id)).orderBy(desc(purchases.purchaseDate));
+    const allProducts = await db.select().from(products).where(eq(products.storeId, store.id));
+    const allSaleItems = await db.select().from(saleItems).where(eq(saleItems.storeId, store.id));
 
     // Current Month dates
     const currentMonthStart = startOfMonth(now);
