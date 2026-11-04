@@ -1,5 +1,6 @@
 import { db, products, shopSettings, customers, suppliers, sales, saleItems, purchases, purchaseItems, inventoryLogs } from "./index";
-import { count } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
+import { ensureStores } from "@/lib/store-context";
 
 export const INITIAL_PRODUCTS = [
   {
@@ -162,6 +163,8 @@ export const INITIAL_PRODUCTS = [
 
 export async function seedDatabase(force = false) {
   try {
+    await ensureStores();
+    if (force) return { success: false, error: "Demo reset is disabled to protect your store data. Add or edit records in each store instead." };
     const [{ value: productCount }] = await db.select({ value: count() }).from(products);
     
     if (productCount > 0 && !force) {
@@ -186,12 +189,13 @@ export async function seedDatabase(force = false) {
       phone: "+971 50 847 2910",
       email: "hamudi.carpets@gmail.com",
       address: "Shop 14, Main Carpet & Rugs Market, Sharjah / Dubai",
+      storeId: 1,
       taxRate: "0.00",
-      currency: "ETB",
+      currency: "ETB ",
       invoicePrefix: "HC-INV-",
       purchasePrefix: "HC-PO-",
       footerNote: "Hamudi Carpet - Premium Floorings, Readymade Carpets & Prayer Mats. Warranty against manufacturing defects.",
-    });
+    }).onConflictDoNothing();
 
     // 2. Customers
     const insertedCustomers = await db.insert(customers).values([
@@ -216,6 +220,7 @@ export async function seedDatabase(force = false) {
     // 4. Products
     const insertedProducts = await db.insert(products).values(INITIAL_PRODUCTS).returning();
 
+    await db.insert(products).values(insertedProducts.map(({ id, storeId, createdAt, updatedAt, stockQuantity, ...p }) => ({ ...p, storeId: 2, stockQuantity: 0 }))).onConflictDoNothing();
     // 5. Generate Past 6 Months Realistic Purchases & Sales Data
     // We will generate realistic sales & purchases from Oct 2025 through current date (e.g. May 2026)
     const now = new Date();
@@ -273,20 +278,9 @@ export async function seedDatabase(force = false) {
           });
         }
 
-        const tax = 0;
+        const tax = (pSubtotal * 0.05);
         const total = pSubtotal + tax;
         const poNumber = `HC-PO-${poCounter++}`;
-
-        // Simulate realistic payment behaviour: mostly paid, a few partial / unpaid
-        let poPaidAmount = total;
-        let poPaymentStatus = "Paid";
-        if (p === 0 && offset <= 1) {
-          poPaidAmount = total * 0.6;
-          poPaymentStatus = "Partial";
-        } else if (p === 1 && offset === 0) {
-          poPaidAmount = 0;
-          poPaymentStatus = "Unpaid";
-        }
 
         const [createdPo] = await db.insert(purchases).values({
           purchaseNumber: poNumber,
@@ -297,12 +291,10 @@ export async function seedDatabase(force = false) {
           tax: tax.toFixed(2),
           shippingFee: "0.00",
           totalAmount: total.toFixed(2),
-          paidAmount: poPaidAmount.toFixed(2),
-          paymentStatus: poPaymentStatus,
+          paidAmount: total.toFixed(2),
+          paymentStatus: "Paid",
           paymentMethod: p % 2 === 0 ? "Bank Transfer" : "Cheque",
-          notes: poPaymentStatus === "Paid"
-            ? `Monthly stock replenishment order from ${supplier.companyName || supplier.name}`
-            : `Monthly stock replenishment order from ${supplier.companyName || supplier.name} (${poPaymentStatus} payment)`,
+          notes: `Monthly stock replenishment order from ${supplier.companyName || supplier.name}`,
         }).returning();
 
         for (const itm of pItemsToInsert) {
@@ -366,7 +358,7 @@ export async function seedDatabase(force = false) {
 
         const discount = s % 4 === 0 ? Math.round(sSubtotal * 0.05) : 0;
         const afterDiscount = sSubtotal - discount;
-        const tax = 0;
+        const tax = (afterDiscount * 0.05);
         const total = afterDiscount + tax;
         const invNumber = `HC-INV-${invoiceCounter++}`;
         const paymentMethod = s % 3 === 0 ? "Cash" : s % 3 === 1 ? "Card" : "Bank Transfer";

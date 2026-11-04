@@ -17,8 +17,8 @@ import {
   Sparkles,
   FileSpreadsheet
 } from "lucide-react";
-import { formatCurrency, formatDate } from "@/lib/utils";
-import { exportToExcel } from "@/lib/excel";
+import { formatCurrency, formatDate, exportToCsv } from "@/lib/utils";
+import { exportMonthlyReportToExcel } from "@/lib/excel-export";
 import type { MonthReportItem } from "@/types";
 
 interface MonthlyReportsViewProps {
@@ -70,7 +70,7 @@ export function MonthlyReportsView({ currency, shopName }: MonthlyReportsViewPro
     }));
   };
 
-  const handleExportExcel = () => {
+  const handleExportCSV = () => {
     if (!reportData) return;
 
     const exportRows = reportData.months.map((m) => ({
@@ -78,7 +78,7 @@ export function MonthlyReportsView({ currency, shopName }: MonthlyReportsViewPro
       "Sales Revenue": m.totalSalesRevenue,
       "Cost of Goods": m.totalCostOfSales,
       "Gross Profit": m.grossProfit,
-      "Profit Margin %": m.marginPercent,
+      "Profit Margin %": `${m.marginPercent}%`,
       "Purchases Cost": m.totalPurchasesCost,
       "Net Cashflow": m.netCashflow,
       "Sales Count": m.salesCount,
@@ -86,7 +86,7 @@ export function MonthlyReportsView({ currency, shopName }: MonthlyReportsViewPro
       "Average Ticket": m.avgSaleTicket,
     }));
 
-    exportToExcel(`Hamudi_Carpet_Monthly_Report_${year}`, "Monthly Report", exportRows);
+    exportToCsv(`Hamudi_Carpet_Monthly_Report_${year}.csv`, exportRows);
   };
 
   const handlePrint = () => {
@@ -140,13 +140,14 @@ export function MonthlyReportsView({ currency, shopName }: MonthlyReportsViewPro
           </div>
 
           <button
-            onClick={handleExportExcel}
+            onClick={handleExportCSV}
             className="px-3.5 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl flex items-center gap-1.5 transition-colors"
           >
             <Download className="w-4 h-4 text-emerald-400" />
-            <span>Export Excel</span>
+            <span>Export CSV</span>
           </button>
 
+          <button type="button" onClick={() => exportMonthlyReportToExcel(reportData.months, shopName)} className="px-3.5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl flex items-center gap-1.5"><FileSpreadsheet className="w-4 h-4" /> Excel</button>
           <button
             onClick={handlePrint}
             className="px-3.5 py-2 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl flex items-center gap-1.5 transition-colors shadow-md shadow-amber-950/40"
@@ -195,8 +196,8 @@ export function MonthlyReportsView({ currency, shopName }: MonthlyReportsViewPro
       </div>
 
       {/* Main Monthly Statement Table */}
-      <div className="bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl overflow-hidden">
-        <div className="p-5 border-b border-slate-800 flex items-center justify-between">
+      <div className="bg-slate-900/90 rounded-xl sm:rounded-2xl border border-slate-800 shadow-xl overflow-hidden">
+        <div className="p-3 sm:p-5 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h3 className="text-base sm:text-lg font-extrabold text-white">Month-by-Month Statement ({year})</h3>
             <p className="text-xs text-slate-400 mt-0.5">Click any row to view product-level sales and purchase details for that month.</p>
@@ -207,7 +208,7 @@ export function MonthlyReportsView({ currency, shopName }: MonthlyReportsViewPro
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] text-left text-xs">
+          <table className="w-full text-left text-xs">
             <thead>
               <tr className="bg-slate-800/80 text-slate-300 font-bold uppercase text-[10px] tracking-wider border-b border-slate-700">
                 <th className="py-3 px-4">Month</th>
@@ -301,7 +302,7 @@ export function MonthlyReportsView({ currency, shopName }: MonthlyReportsViewPro
                             </div>
 
                             <div className="overflow-x-auto rounded-xl border border-slate-800">
-                              <table className="w-full min-w-[720px] text-left text-xs bg-slate-900/60">
+                              <table className="w-full text-left text-xs bg-slate-900/60">
                                 <thead>
                                   <tr className="border-b border-slate-800 text-slate-400 uppercase text-[9px] font-semibold tracking-wider">
                                     <th className="py-2 px-3">Item Name</th>

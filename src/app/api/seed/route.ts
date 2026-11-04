@@ -7,6 +7,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const force = Boolean(body.force);
+    if (force) return NextResponse.json({ success:false, error:"Reset is disabled to protect both stores and imported data." }, {status:400});
     const result = await seedDatabase(force);
     return NextResponse.json(result);
   } catch (error) {

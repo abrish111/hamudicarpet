@@ -2,23 +2,26 @@ import { NextResponse } from "next/server";
 import { db, sales, saleItems, purchases, purchaseItems, products } from "@/db";
 import { seedDatabase } from "@/db/seed";
 import { format, startOfMonth, endOfMonth, subMonths, eachMonthOfInterval } from "date-fns";
+import { getStore, apiError } from "@/lib/store-context";
+import { eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
     await seedDatabase(false);
+    const store = await getStore(req);
     const { searchParams } = new URL(req.url);
     const yearParam = searchParams.get("year");
 
     const now = new Date();
-    const currentYear = yearParam ? parseInt(yearParam, 10) : now.getFullYear();
+    const currentYear = yearParam ? Math.min(2200,Math.max(2000,parseInt(yearParam,10)||now.getFullYear())) : now.getFullYear();
 
-    const allSales = await db.select().from(sales);
-    const allSaleItems = await db.select().from(saleItems);
-    const allPurchases = await db.select().from(purchases);
-    const allPurchaseItems = await db.select().from(purchaseItems);
-    const allProducts = await db.select().from(products);
+    const allSales = await db.select().from(sales).where(eq(sales.storeId, store.id));
+    const allSaleItems = await db.select().from(saleItems).where(eq(saleItems.storeId, store.id));
+    const allPurchases = await db.select().from(purchases).where(eq(purchases.storeId, store.id));
+    const allPurchaseItems = await db.select().from(purchaseItems).where(eq(purchaseItems.storeId, store.id));
+    const allProducts = await db.select().from(products).where(eq(products.storeId, store.id));
 
     // Build 12 months for the selected year
     const monthlyReports = [];

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Users, Truck, Plus, Search, Phone, Mail, MapPin, Building, CheckCircle2, X } from "lucide-react";
+import { Users, Truck, Plus, Search, Phone, Mail, MapPin, Building, CheckCircle2 } from "lucide-react";
 import type { Customer, Supplier } from "@/types";
 
 interface ContactsViewProps {
@@ -190,18 +190,15 @@ export function ContactsView({ customers, suppliers, onRefresh }: ContactsViewPr
         </div>
       )}
 
-      {/* ADD CONTACT MODAL (bottom sheet on mobile) */}
+      {/* ADD CONTACT MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 sm:p-4 animate-fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md p-5 sm:p-6 shadow-2xl space-y-4 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:pb-6">
-            <div className="mx-auto w-10 h-1 rounded-full bg-slate-700 sm:hidden" />
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 p-0 sm:p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[85vh] overflow-y-auto p-5 shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="text-base font-extrabold text-white">
                 Add New {activeTab === "customers" ? "Customer" : "Supplier"}
               </h3>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white active:scale-95 transition-transform">
-                <X className="w-4 h-4" />
-              </button>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
 
             <form onSubmit={handleSaveContact} className="space-y-3">

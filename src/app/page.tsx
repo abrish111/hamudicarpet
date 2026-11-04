@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   LayoutDashboard,
   BarChart3,
@@ -11,23 +11,19 @@ import {
   Users,
   Settings as SettingsIcon,
   RefreshCw,
-  Plus,
-  X,
-  ChevronRight,
-  PackagePlus,
-  Sliders,
-  HandCoins
+  CreditCard, Store,
 } from "lucide-react";
 import { Header } from "@/components/Header";
 import { DashboardView } from "@/components/DashboardView";
 import { MonthlyReportsView } from "@/components/MonthlyReportsView";
-import { SalesView } from "@/components/SalesView";
+import { SalesPosView } from "@/components/SalesPosView";
 import { PurchasesView } from "@/components/PurchasesView";
-import { DebtsCreditView } from "@/components/DebtsCreditView";
 import { ProductsView } from "@/components/ProductsView";
 import { InventoryView } from "@/components/InventoryView";
 import { ContactsView } from "@/components/ContactsView";
 import { SettingsView } from "@/components/SettingsView";
+import { DebtsAndCreditsView } from "@/components/DebtsAndCreditsView";
+import { StoresView, type StoreOverview } from "@/components/StoresView";
 import { InvoiceModal } from "@/components/InvoiceModal";
 import { PurchaseModal } from "@/components/PurchaseModal";
 import type {
@@ -43,69 +39,50 @@ import type {
   ShopSetting,
 } from "@/types";
 
-type TabKey = "dashboard" | "reports" | "sales" | "purchases" | "debts" | "products" | "inventory" | "contacts" | "settings";
+type TabKey = "dashboard" | "reports" | "pos" | "purchases" | "products" | "inventory" | "debts" | "stores" | "contacts" | "settings";
 
 const DEFAULT_KPIS: DashboardKPIs = {
-  currentMonthSales: 0,
-  currentMonthPurchases: 0,
-  currentMonthProfit: 0,
-  currentMonthMargin: 0,
-  salesGrowth: 0,
-  purchasesGrowth: 0,
-  currentMonthSalesCount: 0,
-  currentMonthPurchasesCount: 0,
-  totalStockValueCost: 0,
-  totalStockValueRetail: 0,
-  lowStockCount: 0,
-  outOfStockCount: 0,
-  totalProducts: 0,
-  totalAllTimeSales: 0,
-  totalAllTimePurchases: 0,
-  totalAllTimeProfit: 0,
+  currentMonthSales: 0, currentMonthPurchases: 0, currentMonthProfit: 0, currentMonthMargin: 0,
+  salesGrowth: 0, purchasesGrowth: 0, currentMonthSalesCount: 0, currentMonthPurchasesCount: 0,
+  totalStockValueCost: 0, totalStockValueRetail: 0, lowStockCount: 0, outOfStockCount: 0,
+  totalProducts: 0, totalAllTimeSales: 0, totalAllTimePurchases: 0, totalAllTimeProfit: 0,
 };
 
-// Main tabs shown on the desktop top bar
-const DESKTOP_TABS: Array<{ key: TabKey; label: string; shortLabel: string; icon: React.ReactNode; badge?: string | number }> = [
-  { key: "dashboard", label: "Monthly Dashboard", shortLabel: "Dashboard", icon: <LayoutDashboard className="w-4 h-4" /> },
-  { key: "reports", label: "Monthly Reports", shortLabel: "Reports", icon: <BarChart3 className="w-4 h-4" /> },
-  { key: "sales", label: "Sales & Invoices", shortLabel: "Sales", icon: <ShoppingCart className="w-4 h-4" /> },
-  { key: "purchases", label: "Stock Purchases", shortLabel: "Purchases", icon: <Package className="w-4 h-4" /> },
-  { key: "debts", label: "Debts & Credit", shortLabel: "Debts", icon: <HandCoins className="w-4 h-4" /> },
-  { key: "products", label: "Carpet Catalog", shortLabel: "Catalog", icon: <Layers className="w-4 h-4" />, badge: 12 },
-  { key: "inventory", label: "Warehouse Stock", shortLabel: "Stock", icon: <Boxes className="w-4 h-4" /> },
-  { key: "contacts", label: "Customers & Mills", shortLabel: "Contacts", icon: <Users className="w-4 h-4" /> },
-  { key: "settings", label: "Settings", shortLabel: "Settings", icon: <SettingsIcon className="w-4 h-4" /> },
+const navItems: Array<{
+  key: TabKey;
+  label: string;
+  shortLabel: string;
+  icon: React.ElementType;
+}> = [
+  { key: "dashboard", label: "Dashboard", shortLabel: "Home", icon: LayoutDashboard },
+  { key: "reports", label: "Monthly Reports", shortLabel: "Reports", icon: BarChart3 },
+  { key: "pos", label: "Sales & Invoices", shortLabel: "Sales", icon: ShoppingCart },
+  { key: "purchases", label: "Purchases", shortLabel: "Purchases", icon: Package },
+  { key: "products", label: "Catalog", shortLabel: "Catalog", icon: Layers },
+  { key: "inventory", label: "Inventory", shortLabel: "Stock", icon: Boxes },
+  { key: "debts", label: "Debts & Credits", shortLabel: "Debts", icon: CreditCard },
+  { key: "stores", label: "Stores & Connection", shortLabel: "Stores", icon: Store },
+  { key: "contacts", label: "Contacts", shortLabel: "Contacts", icon: Users },
+  { key: "settings", label: "Settings", shortLabel: "Settings", icon: SettingsIcon },
 ];
 
-// Tabs shown in the mobile bottom navigation (5 slots max)
-const MOBILE_NAV_TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
-  { key: "dashboard", label: "Home", icon: <LayoutDashboard className="w-5 h-5" /> },
-  { key: "sales", label: "Sales", icon: <ShoppingCart className="w-5 h-5" /> },
-  { key: "purchases", label: "Buy", icon: <Package className="w-5 h-5" /> },
-  { key: "debts", label: "Debts", icon: <HandCoins className="w-5 h-5" /> },
-  { key: "settings", label: "More", icon: <Boxes className="w-5 h-5" /> },
-];
-
-// Remaining tabs inside the mobile "More" sheet
-const MORE_TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
-  { key: "products", label: "Carpet Catalog", icon: <Layers className="w-4 h-4" /> },
-  { key: "reports", label: "Monthly Reports", icon: <BarChart3 className="w-4 h-4" /> },
-  { key: "inventory", label: "Warehouse Stock", icon: <Boxes className="w-4 h-4" /> },
-  { key: "contacts", label: "Customers & Mills", icon: <Users className="w-4 h-4" /> },
-  { key: "settings", label: "Settings", icon: <SettingsIcon className="w-4 h-4" /> },
-];
+// Show first 5 on mobile bottom bar, rest in "more" accessed via settings
+const mobileNavItems = navItems.slice(0, 5);
+const moreNavItems = navItems.slice(5);
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
+  const [stores, setStores] = useState<StoreOverview[]>([]);
+  const [storeId, setStoreId] = useState<number|null>(null);
+  const selectedStoreRef=useRef<number|null>(null);
+  const storeGeneration=useRef(0);
+  const requests=useRef(new Set<AbortController>());
+  const [loadError, setLoadError] = useState("");
   const [selectedMonths, setSelectedMonths] = useState<number>(6);
-  const [currency, setCurrency] = useState<string>("ETB");
+  const [currency, setCurrency] = useState<string>("ETB ");
   const [shopSettings, setShopSettings] = useState<ShopSetting | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Mobile UI state
-  const [isMoreSheetOpen, setIsMoreSheetOpen] = useState(false);
-  const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
-
-  // Data States
   const [kpis, setKpis] = useState<DashboardKPIs>(DEFAULT_KPIS);
   const [monthlyData, setMonthlyData] = useState<MonthlyDataPoint[]>([]);
   const [topSellingProducts, setTopSellingProducts] = useState<TopProduct[]>([]);
@@ -113,7 +90,7 @@ export default function HomePage() {
   const [lowStockItems, setLowStockItems] = useState<Product[]>([]);
   const [recentSales, setRecentSales] = useState<Sale[]>([]);
   const [recentPurchases, setRecentPurchases] = useState<Purchase[]>([]);
-  
+
   const [products, setProducts] = useState<Product[]>([]);
   const [salesList, setSalesList] = useState<Sale[]>([]);
   const [purchasesList, setPurchasesList] = useState<Purchase[]>([]);
@@ -121,17 +98,23 @@ export default function HomePage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
-
-  // Modals
+  const scopedFetch=useCallback(async(path:string,options:RequestInit={})=>{
+    if(!storeId||storeId!==selectedStoreRef.current)throw new DOMException("Store changed","AbortError");
+    const generation=storeGeneration.current;const controller=new AbortController();requests.current.add(controller);
+    try{const response=await fetch(path,{...options,headers:{...Object.fromEntries(new Headers(options.headers).entries()),"X-Store-ID":String(storeId)},signal:controller.signal});
+      const data=await response.arrayBuffer();
+      if(storeId!==selectedStoreRef.current||generation!==storeGeneration.current)throw new DOMException("Store changed","AbortError");
+      return new Response(data,{status:response.status,headers:response.headers});
+    }finally{requests.current.delete(controller);}
+  },[storeId]);
   const [selectedInvoiceForModal, setSelectedInvoiceForModal] = useState<Sale | null>(null);
   const [selectedPurchaseForModal, setSelectedPurchaseForModal] = useState<Purchase | null>(null);
 
-  // Fetch Dashboard Data
   const loadDashboardData = useCallback(async (months = selectedMonths) => {
     try {
-      const res = await fetch(`/api/dashboard?months=${months}`);
+      const res = await scopedFetch(`/api/dashboard?months=${months}`);
       const data = await res.json();
-      if (data && data.kpis) {
+      if (data?.kpis) {
         setKpis(data.kpis);
         setMonthlyData(data.monthlyData || []);
         setTopSellingProducts(data.topSellingProducts || []);
@@ -140,201 +123,110 @@ export default function HomePage() {
         setRecentSales(data.recentSales || []);
         setRecentPurchases(data.recentPurchases || []);
       }
-    } catch (err) {
-      console.error("Failed to load dashboard:", err);
-    }
-  }, [selectedMonths]);
+    } catch {}
+  }, [selectedMonths, scopedFetch]);
 
-  // Fetch Products
   const loadProducts = useCallback(async () => {
-    try {
-      const res = await fetch("/api/products");
-      const data = await res.json();
-      if (Array.isArray(data)) setProducts(data);
-    } catch (err) {
-      console.error("Failed to load products:", err);
-    }
-  }, []);
+    try { const d = await (await scopedFetch("/api/products")).json(); if (Array.isArray(d)) setProducts(d); } catch {}
+  }, [scopedFetch]);
 
-  // Fetch Sales
   const loadSales = useCallback(async () => {
-    try {
-      const res = await fetch("/api/sales");
-      const data = await res.json();
-      if (Array.isArray(data)) setSalesList(data);
-    } catch (err) {
-      console.error("Failed to load sales:", err);
-    }
-  }, []);
+    try { const d = await (await scopedFetch("/api/sales")).json(); if (Array.isArray(d)) setSalesList(d); } catch {}
+  }, [scopedFetch]);
 
-  // Fetch Purchases
   const loadPurchases = useCallback(async () => {
-    try {
-      const res = await fetch("/api/purchases");
-      const data = await res.json();
-      if (Array.isArray(data)) setPurchasesList(data);
-    } catch (err) {
-      console.error("Failed to load purchases:", err);
-    }
-  }, []);
+    try { const d = await (await scopedFetch("/api/purchases")).json(); if (Array.isArray(d)) setPurchasesList(d); } catch {}
+  }, [scopedFetch]);
 
-  // Fetch Contacts
   const loadContacts = useCallback(async () => {
     try {
-      const [custRes, supRes] = await Promise.all([
-        fetch("/api/customers"),
-        fetch("/api/suppliers"),
-      ]);
-      const [custData, supData] = await Promise.all([custRes.json(), supRes.json()]);
-      if (Array.isArray(custData)) setCustomers(custData);
-      if (Array.isArray(supData)) setSuppliers(supData);
-    } catch (err) {
-      console.error("Failed to load contacts:", err);
-    }
-  }, []);
+      const [cd, sd] = await Promise.all([(await scopedFetch("/api/customers")).json(), (await scopedFetch("/api/suppliers")).json()]);
+      if (Array.isArray(cd)) setCustomers(cd);
+      if (Array.isArray(sd)) setSuppliers(sd);
+    } catch {}
+  }, [scopedFetch]);
 
-  // Fetch Settings
   const loadSettings = useCallback(async () => {
     try {
-      const res = await fetch("/api/settings");
-      const data = await res.json();
-      if (data && data.shopName) {
-        setShopSettings(data);
-        if (data.currency) setCurrency(data.currency);
-      }
-    } catch (err) {
-      console.error("Failed to load settings:", err);
-    }
-  }, []);
+      const d = await (await scopedFetch("/api/settings")).json();
+      if (d?.shopName) { setShopSettings(d); if (d.currency) setCurrency(d.currency); }
+    } catch {}
+  }, [scopedFetch]);
 
-  // Full Refresh
+  const loadStores=useCallback(async()=>{const res=await fetch("/api/stores");if(!res.ok)throw new Error("Store data could not load. Please retry.");const data=await res.json();setStores(data.stores||[]);return data;},[]);
   const refreshAllData = useCallback(async () => {
+    if(!storeId||storeId!==selectedStoreRef.current)return;
+    const generation=storeGeneration.current;
     setIsLoading(true);
-    await Promise.all([
-      loadDashboardData(selectedMonths),
-      loadProducts(),
-      loadSales(),
-      loadPurchases(),
-      loadContacts(),
-      loadSettings(),
-    ]);
-    setIsLoading(false);
-  }, [loadDashboardData, loadProducts, loadSales, loadPurchases, loadContacts, loadSettings, selectedMonths]);
+    await Promise.all([loadDashboardData(selectedMonths), loadProducts(), loadSales(), loadPurchases(), loadContacts(), loadSettings(), loadStores().catch(()=>{})]);
+    if(generation===storeGeneration.current&&storeId===selectedStoreRef.current)setIsLoading(false);
+  }, [loadDashboardData, loadProducts, loadSales, loadPurchases, loadContacts, loadSettings, selectedMonths, storeId, loadStores]);
 
-  useEffect(() => {
-    refreshAllData();
-  }, [refreshAllData]);
+  useEffect(() => {loadStores().then(data=>{selectedStoreRef.current=data.selectedStoreId;setStoreId(data.selectedStoreId);}).catch(e=>setLoadError(e.message));return()=>requests.current.forEach(c=>c.abort());},[loadStores]);
+  useEffect(() => {if(storeId){setSelectedInvoiceForModal(null);setSelectedPurchaseForModal(null);refreshAllData();}},[refreshAllData,storeId]);
 
-  // Handle single sale view
   const handleViewSale = async (sale: Sale) => {
-    try {
-      const res = await fetch(`/api/sales/${sale.id}`);
-      const data = await res.json();
-      setSelectedInvoiceForModal(data || sale);
-    } catch {
-      setSelectedInvoiceForModal(sale);
-    }
+    try { const d = await (await scopedFetch(`/api/sales/${sale.id}`)).json(); setSelectedInvoiceForModal(d || sale); }
+    catch { setSelectedInvoiceForModal(sale); }
   };
 
-  // Handle single purchase view
   const handleViewPurchase = async (purchase: Purchase) => {
-    try {
-      const res = await fetch(`/api/purchases/${purchase.id}`);
-      const data = await res.json();
-      setSelectedPurchaseForModal(data || purchase);
-    } catch {
-      setSelectedPurchaseForModal(purchase);
-    }
+    try { const d = await (await scopedFetch(`/api/purchases/${purchase.id}`)).json(); setSelectedPurchaseForModal(d || purchase); }
+    catch { setSelectedPurchaseForModal(purchase); }
   };
 
-  // Delete sale
-  const handleDeleteSale = async (saleId: number) => {
-    try {
-      const res = await fetch(`/api/sales/${saleId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete sale");
-      refreshAllData();
-    } catch (err) {
-      alert("Error deleting sale");
-    }
+  const handleDeleteSale = async (id: number) => {
+    try { await scopedFetch(`/api/sales/${id}`, { method: "DELETE" }); refreshAllData(); } catch {}
   };
 
-  // Delete purchase
-  const handleDeletePurchase = async (purchaseId: number) => {
-    try {
-      const res = await fetch(`/api/purchases/${purchaseId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete purchase");
-      refreshAllData();
-    } catch (err) {
-      alert("Error deleting purchase");
-    }
+  const handleDeletePurchase = async (id: number) => {
+    try { await scopedFetch(`/api/purchases/${id}`, { method: "DELETE" }); refreshAllData(); } catch {}
   };
 
-  // Navigate helper: switches tab and closes mobile sheets
-  const navigateTo = (tab: TabKey) => {
+  const handleStoreChange=async(id:number)=>{if(id===storeId)return;setIsLoading(true);setLoadError("");storeGeneration.current++;requests.current.forEach(c=>c.abort());requests.current.clear();try{const res=await fetch("/api/stores/select",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({storeId:id})});if(!res.ok)throw new Error("Could not switch store");setSelectedInvoiceForModal(null);setSelectedPurchaseForModal(null);selectedStoreRef.current=id;setStoreId(id);setKpis(DEFAULT_KPIS);setMonthlyData([]);setRecentSales([]);setRecentPurchases([]);setProducts([]);setSalesList([]);setPurchasesList([]);setCustomers([]);setSuppliers([]);setShopSettings(null);}catch(e){setLoadError(e instanceof Error?e.message:"Store switching failed");setIsLoading(false);}};
+  const handleCurrencyChange=async(currency:string)=>{const res=await scopedFetch("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({...shopSettings,currency,shopName:shopSettings?.shopName||"Hamudi Carpet",taxRate:"0.00"})});if(res.ok){const settings=await res.json();if(storeId===selectedStoreRef.current)setShopSettings(settings);refreshAllData();}else setLoadError("Could not save the currency");};
+  const handleTabChange = (tab: TabKey) => {
     setActiveTab(tab);
-    setIsMoreSheetOpen(false);
-    setIsQuickActionsOpen(false);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setMobileMenuOpen(false);
   };
-
-  const quickActions = [
-    { label: "Record Sale", icon: <ShoppingCart className="w-5 h-5" />, color: "bg-amber-500 text-slate-950", action: () => navigateTo("sales") },
-    { label: "New Purchase", icon: <PackagePlus className="w-5 h-5" />, color: "bg-emerald-600 text-white", action: () => navigateTo("purchases") },
-    { label: "Adjust Stock", icon: <Sliders className="w-5 h-5" />, color: "bg-cyan-600 text-white", action: () => navigateTo("inventory") },
-    { label: "Refresh Data", icon: <RefreshCw className="w-5 h-5" />, color: "bg-slate-700 text-white", action: () => { setIsQuickActionsOpen(false); refreshAllData(); } },
-  ];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-amber-500 selection:text-slate-950">
-      
       {/* Top Header */}
       <Header
         shopName={shopSettings?.shopName || "Hamudi Carpet"}
-        currency={currency}
-        onCurrencyChange={(newCurr) => {
-          setCurrency(newCurr);
-          if (shopSettings) {
-            setShopSettings({ ...shopSettings, currency: newCurr });
-          }
-        }}
-        onOpenNewSale={() => navigateTo("sales")}
-        onOpenNewPurchase={() => navigateTo("purchases")}
-        onOpenQuickStock={() => navigateTo("inventory")}
+        currency={shopSettings?.currency||currency}
+        onCurrencyChange={handleCurrencyChange}
+        onOpenNewSale={() => setActiveTab("pos")}
+        onOpenNewPurchase={() => setActiveTab("purchases")}
         onRefreshData={refreshAllData}
         isLoading={isLoading}
+        stores={stores}
+        activeStoreId={storeId}
+        onStoreChange={handleStoreChange}
       />
 
-      {/* Desktop Navigation Tabs (hidden on mobile) */}
-      <div className="hidden md:block bg-slate-900 border-b border-slate-800 sticky top-20 z-20 shadow-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto py-2.5 scrollbar-none">
-            {DESKTOP_TABS.map((tab) => {
+      {/* Desktop Navigation Tabs - hidden on mobile */}
+      <div className="hidden sm:block bg-slate-900 border-b border-slate-800 sticky top-16 z-20 shadow-md">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex items-center gap-1 overflow-x-auto py-2 scrollbar-none">
+            {navItems.map((tab) => {
               const isActive = activeTab === tab.key;
+              const Icon = tab.icon;
               return (
                 <button
                   key={tab.key}
-                  onClick={() => navigateTo(tab.key)}
-                  className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
                     isActive
-                      ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-950/40 scale-[1.02]"
+                      ? "bg-amber-500 text-slate-950 shadow-md scale-[1.02]"
                       : "text-slate-400 hover:text-white hover:bg-slate-800/80"
                   }`}
                 >
-                  <span className={isActive ? "text-slate-950" : "text-amber-400"}>
-                    {tab.icon}
-                  </span>
+                  <Icon className={`w-3.5 h-3.5 ${isActive ? "text-slate-950" : "text-amber-400"}`} />
                   <span>{tab.label}</span>
-                  {tab.badge && (
-                    <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
-                        isActive
-                          ? "bg-slate-950 text-amber-300"
-                          : "bg-slate-800 text-slate-300"
-                      }`}
-                    >
-                      {tab.badge}
-                    </span>
-                  )}
+                  {tab.key === "products" && <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold ${isActive ? "bg-slate-950 text-amber-300" : "bg-slate-800 text-slate-300"}`}>{products.length}</span>}
+                  {tab.key === "inventory" && kpis.lowStockCount > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/30">{kpis.lowStockCount}</span>}
                 </button>
               );
             })}
@@ -342,239 +234,98 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Main Body Content (bottom padding on mobile for the fixed nav) */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-28 md:pb-8">
-        
-        {activeTab === "dashboard" && (
-          <DashboardView
-            kpis={kpis}
-            monthlyData={monthlyData}
-            topSellingProducts={topSellingProducts}
-            categoryDistribution={categoryDistribution}
-            lowStockItems={lowStockItems}
-            recentSales={recentSales}
-            recentPurchases={recentPurchases}
-            currency={currency}
-            onOpenSaleModal={() => navigateTo("sales")}
-            onOpenPurchaseModal={() => navigateTo("purchases")}
-            onViewSale={handleViewSale}
-            onViewPurchase={handleViewPurchase}
-            onSelectMonthsRange={(m) => {
-              setSelectedMonths(m);
-              loadDashboardData(m);
-            }}
-            selectedMonths={selectedMonths}
+      {/* Main Content */}
+      <main key={storeId} className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-20 sm:pb-6">
+        {loadError&&<div role="alert" className="mb-4 rounded-lg bg-rose-950/30 p-3 text-xs text-rose-300">{loadError}</div>}
+        {!storeId&&<div className="rounded-xl border border-slate-800 bg-slate-900 p-8 text-center text-sm text-slate-300">{loadError||"Loading your two stores..."}</div>}
+        {storeId&&isLoading&&<div role="status" className="rounded-xl border border-slate-800 bg-slate-900 p-3 text-center text-xs text-amber-300 mb-3">Loading {stores.find(s=>s.id===storeId)?.name||"store"}...</div>}
+        {storeId&&!isLoading&&activeTab === "dashboard" && (
+          <DashboardView kpis={kpis} monthlyData={monthlyData} topSellingProducts={topSellingProducts}
+            categoryDistribution={categoryDistribution} lowStockItems={lowStockItems} recentSales={recentSales}
+            recentPurchases={recentPurchases} currency={currency} onOpenSaleModal={() => setActiveTab("pos")}
+            onOpenPurchaseModal={() => setActiveTab("purchases")} onViewSale={handleViewSale} onViewPurchase={handleViewPurchase}
+            onSelectMonthsRange={(m) => { setSelectedMonths(m); loadDashboardData(m); }} selectedMonths={selectedMonths}
           />
         )}
-
-        {activeTab === "reports" && (
-          <MonthlyReportsView
-            currency={currency}
-            shopName={shopSettings?.shopName || "Hamudi Carpet"}
-          />
-        )}
-
-        {activeTab === "sales" && (
-          <SalesView
-            products={products}
-            salesList={salesList}
-            customers={customers}
-            currency={currency}
-            onSaleCreated={refreshAllData}
-            onViewInvoice={handleViewSale}
-            onDeleteSale={handleDeleteSale}
-          />
-        )}
-
-        {activeTab === "purchases" && (
-          <PurchasesView
-            products={products}
-            purchasesList={purchasesList}
-            suppliers={suppliers}
-            currency={currency}
-            onPurchaseCreated={refreshAllData}
-            onViewPurchase={handleViewPurchase}
-            onDeletePurchase={handleDeletePurchase}
-          />
-        )}
-
-        {activeTab === "debts" && (
-          <DebtsCreditView
-            currency={currency}
-            refreshKey={salesList.length + purchasesList.length}
-          />
-        )}
-
-        {activeTab === "products" && (
-          <ProductsView
-            products={products}
-            currency={currency}
-            onRefresh={refreshAllData}
-            onQuickRestock={() => navigateTo("purchases")}
-          />
-        )}
-
-        {activeTab === "inventory" && (
-          <InventoryView
-            products={products}
-            currency={currency}
-            onRefresh={refreshAllData}
-          />
-        )}
-
-        {activeTab === "contacts" && (
-          <ContactsView
-            customers={customers}
-            suppliers={suppliers}
-            onRefresh={refreshAllData}
-          />
-        )}
-
-        {activeTab === "settings" && (
-          <SettingsView
-            settings={shopSettings}
-            onRefreshAll={refreshAllData}
-          />
-        )}
-
+        {storeId&&!isLoading&&activeTab === "reports" && <MonthlyReportsView currency={currency} shopName={shopSettings?.shopName || "Hamudi Carpet"} />}
+        {storeId&&!isLoading&&activeTab === "pos" && <SalesPosView products={products} salesList={salesList} customers={customers} suppliers={suppliers} currency={currency} onSaleCreated={refreshAllData} onViewInvoice={handleViewSale} onDeleteSale={handleDeleteSale} />}
+        {storeId&&!isLoading&&activeTab === "purchases" && <PurchasesView products={products} purchasesList={purchasesList} suppliers={suppliers} customers={customers} currency={currency} onPurchaseCreated={refreshAllData} onViewPurchase={handleViewPurchase} onDeletePurchase={handleDeletePurchase} />}
+        {storeId&&!isLoading&&activeTab === "products" && <ProductsView products={products} currency={currency} onRefresh={refreshAllData} onQuickRestock={() => setActiveTab("purchases")} />}
+        {storeId&&!isLoading&&activeTab === "inventory" && <InventoryView products={products} currency={currency} onRefresh={refreshAllData} />}
+        {storeId&&!isLoading&&activeTab === "debts" && <DebtsAndCreditsView salesList={salesList} purchasesList={purchasesList} currency={currency} onRefresh={refreshAllData} />}
+        {storeId&&!isLoading&&activeTab === "contacts" && <ContactsView customers={customers} suppliers={suppliers} onRefresh={refreshAllData} />}
+        {storeId&&!isLoading&&activeTab === "settings" && <SettingsView settings={shopSettings} onRefreshAll={refreshAllData} />}
+        {storeId&&activeTab==="stores"&&<StoresView stores={stores} activeStoreId={storeId} products={products} onSelect={handleStoreChange} onRefresh={refreshAllData}/>}
       </main>
 
-      {/* Printable / Detail Modals */}
-      <InvoiceModal
-        sale={selectedInvoiceForModal}
-        currency={currency}
-        shopName={shopSettings?.shopName || "Hamudi Carpet"}
-        onClose={() => setSelectedInvoiceForModal(null)}
-      />
-
-      <PurchaseModal
-        purchase={selectedPurchaseForModal}
-        currency={currency}
-        shopName={shopSettings?.shopName || "Hamudi Carpet"}
-        onClose={() => setSelectedPurchaseForModal(null)}
-      />
-
-      {/* Footer (desktop only) */}
-      <footer className="hidden md:block mt-auto bg-slate-900 border-t border-slate-800/80 py-6 text-slate-400 text-xs print:hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-200">Hamudi Carpet Shop Management</span>
-            <span>•</span>
-            <span>Monthly Purchase & Sales Analytics</span>
-          </div>
-          <p className="text-slate-500">
-            Catalog: Readymade Carpets (3*4, 2.5*3.5, 2*3, 1.5*2.2, 4*5, 4*6), Wall to Wall, PVC, WA Carpet, Artificial Grass & Praying Mats.
-          </p>
-        </div>
-      </footer>
-
-      {/* ============ MOBILE: Floating Quick Action Button ============ */}
-      <button
-        onClick={() => setIsQuickActionsOpen(!isQuickActionsOpen)}
-        aria-label="Quick actions"
-        className="md:hidden fixed bottom-24 right-4 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-amber-500 to-amber-600 text-slate-950 shadow-xl shadow-amber-950/50 border border-amber-400/50 flex items-center justify-center transition-transform active:scale-90 hover:scale-105"
-      >
-        {isQuickActionsOpen ? <X className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
-      </button>
-
-      {/* Mobile Quick Actions Sheet */}
-      {isQuickActionsOpen && (
-        <div className="md:hidden fixed inset-0 z-40">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setIsQuickActionsOpen(false)} />
-          <div className="absolute bottom-24 right-4 left-4 max-w-sm mx-auto bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-3 space-y-1 animate-slide-up">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 pt-1 pb-2">
-              Quick Actions
-            </p>
-            {quickActions.map((qa) => (
-              <button
-                key={qa.label}
-                onClick={qa.action}
-                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-slate-800 active:bg-slate-800 transition-colors text-left"
-              >
-                <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${qa.color}`}>
-                  {qa.icon}
-                </span>
-                <span className="text-sm font-bold text-white">{qa.label}</span>
-                <ChevronRight className="w-4 h-4 text-slate-500 ml-auto" />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ============ MOBILE: Bottom Navigation Bar ============ */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 pb-[env(safe-area-inset-bottom)]">
-        <div className="grid grid-cols-5">
-          {MOBILE_NAV_TABS.map((tab) => {
+      {/* Mobile Bottom Navigation */}
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900 border-t border-slate-800 shadow-[0_-4px_20px_rgba(0,#0,0,0.3)]">
+        <div className="flex items-center justify-around px-1 py-1">
+          {mobileNavItems.map((tab) => {
             const isActive = activeTab === tab.key;
+            const Icon = tab.icon;
             return (
               <button
                 key={tab.key}
-                onClick={() => (tab.key === "settings" ? setIsMoreSheetOpen(true) : navigateTo(tab.key))}
-                className={`flex flex-col items-center justify-center gap-1 py-2.5 transition-colors ${
-                  isActive ? "text-amber-400" : "text-slate-500 hover:text-slate-300"
+                onClick={() => handleTabChange(tab.key)}
+                className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-lg min-w-[56px] transition-all ${
+                  isActive ? "text-amber-400" : "text-slate-500 active:text-white"
                 }`}
               >
-                {tab.icon}
-                <span className="text-[10px] font-bold">{tab.label}</span>
-                {isActive && <span className="w-1 h-1 rounded-full bg-amber-400" />}
+                <Icon className={`w-5 h-5 ${isActive ? "text-amber-400" : ""}`} />
+                <span className={`text-[10px] mt-0.5 font-semibold ${isActive ? "text-amber-400" : ""}`}>{tab.shortLabel}</span>
+                {isActive && <span className="w-1 h-1 rounded-full bg-amber-400 mt-0.5" />}
               </button>
             );
           })}
+          {/* More button */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="flex flex-col items-center justify-center py-1.5 px-2 rounded-lg min-w-[56px] text-slate-500 active:text-white"
+          >
+            <SettingsIcon className="w-5 h-5" />
+            <span className="text-[10px] mt-0.5 font-semibold">More</span>
+          </button>
         </div>
+
+        {/* More Menu Dropdown */}
+        {mobileMenuOpen && (
+          <div className="absolute bottom-full right-0 left-0 bg-slate-900 border-t border-slate-800 shadow-lg p-2 grid grid-cols-3 gap-1">
+            {moreNavItems.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => handleTabChange(tab.key)}
+                  className={`flex flex-col items-center justify-center py-3 rounded-xl transition-all ${
+                    isActive ? "bg-amber-500/20 text-amber-400" : "text-slate-400 active:bg-slate-800"
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span className="text-[10px] mt-1 font-semibold">{tab.shortLabel}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </nav>
 
-      {/* Mobile "More" Sheet */}
-      {isMoreSheetOpen && (
-        <div className="md:hidden fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/70" onClick={() => setIsMoreSheetOpen(false)} />
-          <div className="absolute bottom-0 inset-x-0 bg-slate-900 border-t border-slate-800 rounded-t-3xl shadow-2xl p-5 pb-[calc(env(safe-area-inset-bottom)+1rem)] animate-slide-up">
-            <div className="mx-auto w-10 h-1 rounded-full bg-slate-700 mb-4" />
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-extrabold text-white">More Options</h3>
-              <button
-                onClick={() => setIsMoreSheetOpen(false)}
-                className="p-2 rounded-lg bg-slate-800 text-slate-300 active:scale-95 transition-transform"
-                aria-label="Close menu"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-1">
-              {MORE_TABS.map((tab) => {
-                const isActive = activeTab === tab.key;
-                return (
-                  <button
-                    key={tab.key}
-                    onClick={() => navigateTo(tab.key)}
-                    className={`w-full flex items-center gap-3 px-3 py-3.5 rounded-xl transition-colors ${
-                      isActive ? "bg-amber-500/10 text-amber-300" : "hover:bg-slate-800 text-slate-200"
-                    }`}
-                  >
-                    <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive ? "bg-amber-500/20 text-amber-300" : "bg-slate-800 text-amber-400"}`}>
-                      {tab.icon}
-                    </span>
-                    <span className="text-sm font-bold">{tab.label}</span>
-                    {isActive && <span className="ml-auto text-[10px] font-bold bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full">Current</span>}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="mt-4 pt-4 border-t border-slate-800">
-              <button
-                onClick={() => { setIsMoreSheetOpen(false); refreshAllData(); }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-800 text-slate-200 text-sm font-bold active:scale-[0.98] transition-transform"
-              >
-                <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-amber-400" : ""}`} />
-                Refresh All Data
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Mobile menu backdrop */}
+      {mobileMenuOpen && (
+        <div className="sm:hidden fixed inset-0 z-30 bg-black/50" onClick={() => setMobileMenuOpen(false)} />
       )}
 
+      {/* Modals */}
+      <InvoiceModal sale={selectedInvoiceForModal} currency={currency} shopName={shopSettings?.shopName || "Hamudi Carpet"} onClose={() => setSelectedInvoiceForModal(null)} />
+      <PurchaseModal purchase={selectedPurchaseForModal} currency={currency} shopName={shopSettings?.shopName || "Hamudi Carpet"} onClose={() => setSelectedPurchaseForModal(null)} />
+
+      {/* Desktop Footer */}
+      <footer className="hidden sm:block mt-auto bg-slate-900 border-t border-slate-800/80 py-4 text-slate-500 text-[10px] print:hidden">
+        <div className="max-w-7xl mx-auto px-6 text-center">
+          Hamudi Carpet Shop Management • Readymade Carpets, Wall to Wall, PVC, WA Carpet, Artificial Grass & Prayer Mats
+        </div>
+      </footer>
     </div>
   );
 }
